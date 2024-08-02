@@ -3,6 +3,7 @@ use std::process;
 use std::path::Path;
 
 use files::file_check;
+use files::ini_filemap;
 
 mod files;
 
@@ -14,7 +15,7 @@ fn main() {
     } else {
         let filepath: &String = &args[1];
         if file_check(filepath) {
-            println!("File Exists!");
+            ini_filemap(filepath);
         } else {
             println!("Booboo");
         }
