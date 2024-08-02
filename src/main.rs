@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use files::file_check;
 use files::ini_filemap;
 
+use body::Body;
+
 mod files;
+mod body;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -16,15 +19,16 @@ fn main() {
     } else {
         let filepath: &String = &args[1];
         if file_check(filepath) {
+            let mut bodies: Vec<Body> = Vec::new();
             let map = ini_filemap(filepath).unwrap();
             for (section, props) in map {
-                println!("section: {}", section);
-                for (k, v) in props {
-                    println!("{}:{}", k, match v {
-                        Some(v) => v,
-                        None => "0".to_string(),
-                    })
-                }
+                bodies.push(Body::new(section, props));
+                //for (k, v) in props {
+                //    println!("{}:{}", k, match v {
+                //        Some(v) => v,
+                //        None => "0".to_string(),
+                //    })
+                //}
             }
         } else {
             println!("Booboo");
