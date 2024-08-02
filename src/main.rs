@@ -22,7 +22,9 @@ fn main() {
             let mut bodies: Vec<Body> = Vec::new();
             let map = ini_filemap(filepath).unwrap();
             for (section, props) in map {
-                bodies.push(Body::new(section, props));
+                let body = Body::new(section, props);
+                println!("The value of x for body:{} is {}", body.name, body.x);
+                //bodies.push(Body::new(section, props));
                 //for (k, v) in props {
                 //    println!("{}:{}", k, match v {
                 //        Some(v) => v,
