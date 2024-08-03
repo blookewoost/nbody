@@ -18,6 +18,23 @@ pub struct Body {
 }
 
 impl Body {
+    pub fn populate(&mut self, data: HashMap<String, Option<String>>) {
+        for (key, value) in data {
+            let parsed_value = match value {
+                Some(string_value) => match string_value.parse::<f64>() {
+                    Ok(parsed) => parsed,
+                    Err(e) => {
+                        println!("Error parsing value for field: {}... populating with 0", key);
+                        0.0
+                    }
+                }
+                None => 0.0
+            };
+            
+            self.keymap(&key, parsed_value);
+        }
+    }
+
     fn keymap(&mut self, key: &str, value: f64) {
         match key {
             "mass" => self.mass = value,
@@ -31,35 +48,9 @@ impl Body {
         }
     }
 
-    pub fn new(name: String, data: HashMap<String, Option<String>>) -> Body {
-        for (key, value) in data {
-            let parsed_value = match value {
-                Some(string_value) => match string_value.parse::<f64>() {
-                    Ok(parsed) => parsed,
-                    Err(e) => {
-                        println!("Error parsing value for field: {}... populating with 0", key);
-                        0.0
-                    }
-                }
-                None => 0.0
-            };
-            
-            keymap(key, parsed_value);
-        }
-        let x = match data.get("position_x") {
-            Some(Some(v)) => v,
-            Some(None) => "0.0",
-            None => "0",
-        };
-        let value = match x.parse::<f64>() {
-            Ok(value) => value,
-            Err(e) => 0.0
-        };
-
-        return Body {name, x:value, ..Default::default()}
+    pub fn new(name: String) -> Body {
+        return Body {name, ..Default::default()}
     }
-
-    //fn retrieve_value()
 }
 
 
@@ -67,7 +58,7 @@ impl Default for Body {
     fn default() -> Self {
         Body {
             mass: 0.0,
-            name: "test".to_string(),
+            name: "Default".to_string(),
             fx: 0.0,
             fy: 0.0,
             fz: 0.0,

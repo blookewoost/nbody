@@ -20,17 +20,11 @@ fn main() {
         let filepath: &String = &args[1];
         if file_check(filepath) {
             let mut bodies: Vec<Body> = Vec::new();
-            let map = ini_filemap(filepath).unwrap();
+            let map: HashMap<String, HashMap<String, Option<String>>> = ini_filemap(filepath).unwrap();
             for (section, props) in map {
-                let body = Body::new(section, props);
-                println!("The value of x for body:{} is {}", body.name, body.x);
-                //bodies.push(Body::new(section, props));
-                //for (k, v) in props {
-                //    println!("{}:{}", k, match v {
-                //        Some(v) => v,
-                //        None => "0".to_string(),
-                //    })
-                //}
+                let mut body = Body::new(section);
+                body.populate(props);
+                bodies.push(body);
             }
         } else {
             println!("Booboo");
