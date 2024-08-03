@@ -7,9 +7,11 @@ use files::file_check;
 use files::ini_filemap;
 
 use body::Body;
+use physics::calculate_forces;
 
 mod files;
 mod body;
+mod physics;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,6 +28,8 @@ fn main() {
                 body.populate(props);
                 bodies.push(body);
             }
+            calculate_forces(bodies);
+            
         } else {
             println!("Booboo");
         }
