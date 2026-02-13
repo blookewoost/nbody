@@ -7,8 +7,10 @@ pub mod integrator;
 pub mod body;
 pub mod simulator;
 pub mod config;
+pub mod trajectory;
 
 pub use integrator::RungeKuttaFehlberg;
 pub use body::Body;
 pub use simulator::Simulator;
 pub use config::{SimulationConfig, parse_ini_file};
+pub use trajectory::{TrajectoryData, BodyTrajectory, Position};

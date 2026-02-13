@@ -1,6 +1,5 @@
-use threebody_sim::{Body, Simulator, parse_ini_file};
+use threebody_sim::{Simulator, parse_ini_file};
 use std::env;
-use std::path::Path;
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -52,7 +51,6 @@ fn main() -> std::io::Result<()> {
     sim.print_positions();
     println!("Final total energy: {:.6e} J", sim.total_energy());
     
-    let initial_energy = sim.total_energy(); // This will show final energy now
     println!("Simulation time elapsed: {:.2} days", sim.time() / 86400.0);
     println!("\nResults saved to: {}", output_file);
 

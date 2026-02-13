@@ -1,6 +1,21 @@
 [package]
 name = "threebody-sim"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+csv = "1.3"
+bevy = { version = "0.13", features = ["dynamic_linking"], optional = true }
+
+[[bin]]
+name = "threebody-sim"
+path = "src/main.rs"
+
+[[bin]]
+name = "viewer"
+path = "src/bin/viewer.rs"
+required-features = ["viewer"]
+
+[features]
+default = []
+viewer = ["bevy"]
