@@ -93,6 +93,10 @@ struct BodyTrail {
     max_trail_length: usize,
 }
 
+/// Marker component for trail mesh entities
+#[derive(Component)]
+struct TrailMesh;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     
@@ -380,11 +384,14 @@ fn render_trails(
             ..default()
         });
 
-        commands.spawn(PbrBundle {
-            mesh: meshes.add(mesh),
-            material,
-            ..default()
-        });
+        commands.spawn((
+            PbrBundle {
+                mesh: meshes.add(mesh),
+                material,
+                ..default()
+            },
+            TrailMesh,
+        ));
     }
 }
 
@@ -455,6 +462,8 @@ fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<ViewerState>,
     mut trail_query: Query<&mut BodyTrail>,
+    mut commands: Commands,
+    trail_mesh_query: Query<Entity, With<TrailMesh>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
         state.is_playing = !state.is_playing;
@@ -473,6 +482,11 @@ fn handle_input(
 
     if keyboard_input.just_pressed(KeyCode::KeyR) {
         state.current_frame = 0;
+        
+        // Clear all trail meshes from the scene
+        for entity in trail_mesh_query.iter() {
+            commands.entity(entity).despawn();
+        }
         
         // Clear all trails
         for mut trail in trail_query.iter_mut() {
