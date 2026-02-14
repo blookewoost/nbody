@@ -2,6 +2,41 @@ use bevy::prelude::*;
 use threebody_sim::TrajectoryData;
 use std::env;
 
+/// Calculate the centroid and maximum distance of bodies at frame 0
+fn calculate_camera_target(trajectory: &TrajectoryData) -> (Vec3, f32) {
+    let mut centroid = Vec3::ZERO;
+    let mut count = 0;
+
+    // Calculate centroid of all bodies at frame 0
+    for body_traj in &trajectory.bodies {
+        if let Some(pos) = body_traj.get_position(0) {
+            centroid += Vec3::new(pos.x, pos.y, pos.z);
+            count += 1;
+        }
+    }
+
+    if count > 0 {
+        centroid /= count as f32;
+    }
+
+    // Calculate maximum distance from centroid
+    let mut max_distance: f32 = 0.0;
+    for body_traj in &trajectory.bodies {
+        if let Some(pos) = body_traj.get_position(0) {
+            let pos_vec = Vec3::new(pos.x, pos.y, pos.z);
+            let distance = (pos_vec - centroid).length();
+            max_distance = max_distance.max(distance);
+        }
+    }
+
+    // Ensure minimum distance for very close systems
+    if max_distance < 1e9 {
+        max_distance = 1e9;
+    }
+
+    (centroid, max_distance)
+}
+
 /// Main viewer state
 #[derive(Resource)]
 struct ViewerState {
@@ -71,9 +106,19 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     state: Res<ViewerState>,
 ) {
+    // Calculate camera position based on initial body positions
+    let (centroid, max_distance) = calculate_camera_target(&state.trajectory);
+    let camera_distance = max_distance * 2.5; // Position camera at 2.5x the max distance
+    let camera_pos = Vec3::new(
+        centroid.x + camera_distance * 0.5,
+        centroid.y + camera_distance * 0.8,
+        centroid.z + camera_distance * 0.5,
+    );
+
     // Camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 3e11).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(camera_pos.x, camera_pos.y, camera_pos.z)
+            .looking_at(centroid, Vec3::Y),
         ..default()
     });
 
