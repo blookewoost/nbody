@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::input::mouse::MouseMotion;
 use threebody_sim::TrajectoryData;
 use std::env;
 
@@ -37,6 +38,14 @@ fn calculate_camera_target(trajectory: &TrajectoryData) -> (Vec3, f32) {
     (centroid, max_distance)
 }
 
+/// Calculate camera position from spherical coordinates around a target
+fn calculate_camera_position(target: Vec3, distance: f32, yaw: f32, pitch: f32) -> Vec3 {
+    let x = target.x + distance * pitch.cos() * yaw.sin();
+    let y = target.y + distance * pitch.sin();
+    let z = target.z + distance * pitch.cos() * yaw.cos();
+    Vec3::new(x, y, z)
+}
+
 /// Main viewer state
 #[derive(Resource)]
 struct ViewerState {
@@ -44,6 +53,28 @@ struct ViewerState {
     current_frame: usize,
     is_playing: bool,
     speed: f32, // Frames per update
+    centroid: Vec3,
+    camera_distance: f32,
+}
+
+/// Camera control state for mouse-based rotation
+#[derive(Resource)]
+struct CameraState {
+    yaw: f32,   // Horizontal rotation
+    pitch: f32, // Vertical rotation
+    is_dragging: bool,
+    last_mouse_pos: Vec2,
+}
+
+impl Default for CameraState {
+    fn default() -> Self {
+        CameraState {
+            yaw: 0.45,   // Initial angle
+            pitch: 0.64, // Initial angle
+            is_dragging: false,
+            last_mouse_pos: Vec2::ZERO,
+        }
+    }
 }
 
 /// Component for bodies in the 3D view
@@ -82,11 +113,16 @@ fn main() {
         }
     };
 
+    let (centroid, max_distance) = calculate_camera_target(&trajectory);
+    let camera_distance = max_distance * 2.5;
+
     let viewer_state = ViewerState {
         trajectory,
         current_frame: 0,
         is_playing: true,
         speed: 1.0,
+        centroid,
+        camera_distance,
     };
 
     App::new()
@@ -99,8 +135,11 @@ fn main() {
             ..default()
         }))
         .insert_resource(viewer_state)
+        .insert_resource(CameraState::default())
         .add_systems(Startup, setup)
         .add_systems(Update, (
+            handle_mouse_input,
+            update_camera,
             update_positions,
             update_trails,
             render_trails,
@@ -115,20 +154,20 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     state: Res<ViewerState>,
+    camera_state: Res<CameraState>,
 ) {
-    // Calculate camera position based on initial body positions
-    let (centroid, max_distance) = calculate_camera_target(&state.trajectory);
-    let camera_distance = max_distance * 2.5; // Position camera at 2.5x the max distance
-    let camera_pos = Vec3::new(
-        centroid.x + camera_distance * 0.5,
-        centroid.y + camera_distance * 0.8,
-        centroid.z + camera_distance * 0.5,
+    // Calculate initial camera position using stored centroid and distance with initial angles
+    let camera_pos = calculate_camera_position(
+        state.centroid,
+        state.camera_distance,
+        camera_state.yaw,
+        camera_state.pitch,
     );
 
     // Camera
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(camera_pos.x, camera_pos.y, camera_pos.z)
-            .looking_at(centroid, Vec3::Y),
+            .looking_at(state.centroid, Vec3::Y),
         ..default()
     });
 
@@ -203,6 +242,7 @@ fn setup(
     }
 
     println!("Controls:");
+    println!("  Mouse: Click and drag to rotate the view");
     println!("  SPACE: Play/Pause");
     println!("  LEFT:  Slow down");
     println!("  RIGHT: Speed up");
@@ -293,6 +333,50 @@ fn render_trails(
             material,
             ..default()
         });
+    }
+}
+
+/// Handle mouse input for camera control
+fn handle_mouse_input(
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut mouse_motion_events: EventReader<MouseMotion>,
+    mut camera_state: ResMut<CameraState>,
+) {
+    if mouse_button_input.pressed(MouseButton::Left) {
+        camera_state.is_dragging = true;
+        
+        for event in mouse_motion_events.read() {
+            // Sensitivity factor for camera rotation
+            let sensitivity = 0.01;
+            
+            // Update yaw (horizontal) and pitch (vertical)
+            camera_state.yaw += event.delta.x * sensitivity;
+            camera_state.pitch = (camera_state.pitch + event.delta.y * sensitivity)
+                .clamp(-std::f32::consts::PI / 2.0 + 0.1, std::f32::consts::PI / 2.0 - 0.1);
+        }
+    } else {
+        camera_state.is_dragging = false;
+        // Consume remaining events even when not dragging
+        for _ in mouse_motion_events.read() {}
+    }
+}
+
+/// Update camera position based on angles
+fn update_camera(
+    state: Res<ViewerState>,
+    camera_state: Res<CameraState>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+) {
+    if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+        let camera_pos = calculate_camera_position(
+            state.centroid,
+            state.camera_distance,
+            camera_state.yaw,
+            camera_state.pitch,
+        );
+        
+        *camera_transform = Transform::from_xyz(camera_pos.x, camera_pos.y, camera_pos.z)
+            .looking_at(state.centroid, Vec3::Y);
     }
 }
 
