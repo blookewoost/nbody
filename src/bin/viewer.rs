@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::input::mouse::MouseMotion;
+use bevy::input::mouse::{MouseMotion, MouseWheel};
 use threebody_sim::TrajectoryData;
 use std::env;
 
@@ -64,6 +64,7 @@ struct CameraState {
     pitch: f32, // Vertical rotation
     is_dragging: bool,
     last_mouse_pos: Vec2,
+    zoom: f32,  // Zoom multiplier (1.0 = default, <1.0 = zoomed in, >1.0 = zoomed out)
 }
 
 impl Default for CameraState {
@@ -73,6 +74,7 @@ impl Default for CameraState {
             pitch: 0.64, // Initial angle
             is_dragging: false,
             last_mouse_pos: Vec2::ZERO,
+            zoom: 1.0,
         }
     }
 }
@@ -242,7 +244,8 @@ fn setup(
     }
 
     println!("Controls:");
-    println!("  Mouse: Click and drag to rotate the view");
+    println!("  Mouse Drag: Rotate the view");
+    println!("  Mouse Wheel: Zoom in/out");
     println!("  SPACE: Play/Pause");
     println!("  LEFT:  Slow down");
     println!("  RIGHT: Speed up");
@@ -281,7 +284,7 @@ fn update_trails(
     }
 }
 
-/// Render trails as line meshes
+/// Render trails as tube meshes for visibility
 fn render_trails(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -300,22 +303,65 @@ fn render_trails(
             continue;
         }
 
-        // Create a line mesh for the trail
+        let tube_radius = 2e9; // Radius of the tube along the trail
+        let segments_per_section = 8; // Number of segments around the tube
+
         let mut positions = Vec::new();
         let mut indices = Vec::new();
 
-        for pos in &trail.positions {
-            positions.push([pos.x, pos.y, pos.z]);
+        // Create tube mesh from the trail positions
+        for (seg_idx, segment) in trail.positions.windows(2).enumerate() {
+            let p1 = segment[0];
+            let p2 = segment[1];
+            let direction = (p2 - p1).normalize();
+
+            // Create perpendicular vectors for the tube cross-section
+            let up = if direction.dot(Vec3::Y).abs() < 0.9 {
+                Vec3::Y
+            } else {
+                Vec3::X
+            };
+            let right = direction.cross(up).normalize();
+            let local_up = direction.cross(right).normalize();
+
+            // Create ring of vertices around p1
+            let ring_start = positions.len() as u32;
+            for i in 0..segments_per_section {
+                let angle = (i as f32 / segments_per_section as f32) * std::f32::consts::TAU;
+                let offset = (right * angle.cos() + local_up * angle.sin()) * tube_radius;
+                positions.push([p1.x + offset.x, p1.y + offset.y, p1.z + offset.z]);
+            }
+
+            // Create ring of vertices around p2
+            let next_ring_start = positions.len() as u32;
+            for i in 0..segments_per_section {
+                let angle = (i as f32 / segments_per_section as f32) * std::f32::consts::TAU;
+                let offset = (right * angle.cos() + local_up * angle.sin()) * tube_radius;
+                positions.push([p2.x + offset.x, p2.y + offset.y, p2.z + offset.z]);
+            }
+
+            // Connect the two rings with triangles
+            for i in 0..segments_per_section {
+                let next_i = (i + 1) % segments_per_section;
+
+                // First triangle
+                indices.push(ring_start + i as u32);
+                indices.push(ring_start + next_i as u32);
+                indices.push(next_ring_start + i as u32);
+
+                // Second triangle
+                indices.push(ring_start + next_i as u32);
+                indices.push(next_ring_start + next_i as u32);
+                indices.push(next_ring_start + i as u32);
+            }
         }
 
-        // Create line segments connecting consecutive points
-        for i in 0..positions.len() - 1 {
-            indices.push(i as u32);
-            indices.push((i + 1) as u32);
+        if positions.is_empty() {
+            continue;
         }
 
         let mut mesh = Mesh::new(
-            bevy::render::mesh::PrimitiveTopology::LineList,
+            bevy::render::mesh::PrimitiveTopology::TriangleList,
             bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
         );
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
@@ -340,6 +386,7 @@ fn render_trails(
 fn handle_mouse_input(
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut mouse_motion_events: EventReader<MouseMotion>,
+    mut mouse_wheel_events: EventReader<MouseWheel>,
     mut camera_state: ResMut<CameraState>,
 ) {
     if mouse_button_input.pressed(MouseButton::Left) {
@@ -359,18 +406,36 @@ fn handle_mouse_input(
         // Consume remaining events even when not dragging
         for _ in mouse_motion_events.read() {}
     }
+
+    // Handle mouse wheel for zoom
+    for event in mouse_wheel_events.read() {
+        match event.unit {
+            bevy::input::mouse::MouseScrollUnit::Line => {
+                let zoom_factor = 1.1;
+                if event.y > 0.0 {
+                    camera_state.zoom /= zoom_factor; // Zoom in
+                    camera_state.zoom = camera_state.zoom.max(0.1); // Min zoom
+                } else {
+                    camera_state.zoom *= zoom_factor; // Zoom out
+                    camera_state.zoom = camera_state.zoom.min(10.0); // Max zoom
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
-/// Update camera position based on angles
+/// Update camera position based on angles and zoom
 fn update_camera(
     state: Res<ViewerState>,
     camera_state: Res<CameraState>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
     if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+        let effective_distance = state.camera_distance * camera_state.zoom;
         let camera_pos = calculate_camera_position(
             state.centroid,
-            state.camera_distance,
+            effective_distance,
             camera_state.yaw,
             camera_state.pitch,
         );
