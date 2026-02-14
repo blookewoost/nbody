@@ -227,6 +227,12 @@ fn setup(
             ..default()
         });
 
+        // Initialize trail with the first position
+        let mut initial_positions = Vec::new();
+        if let Some(pos) = state.trajectory.bodies[idx].get_position(0) {
+            initial_positions.push(Vec3::new(pos.x, pos.y, pos.z));
+        }
+
         commands.spawn((
             PbrBundle {
                 mesh: sphere_mesh.clone(),
@@ -237,7 +243,7 @@ fn setup(
             BodyVisual { body_index: idx },
             BodyTrail {
                 body_index: idx,
-                positions: Vec::new(),
+                positions: initial_positions,
                 max_trail_length: 500, // Keep last 500 positions
             },
         ));
@@ -448,6 +454,7 @@ fn update_camera(
 fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<ViewerState>,
+    mut trail_query: Query<&mut BodyTrail>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
         state.is_playing = !state.is_playing;
@@ -466,6 +473,17 @@ fn handle_input(
 
     if keyboard_input.just_pressed(KeyCode::KeyR) {
         state.current_frame = 0;
+        
+        // Clear all trails
+        for mut trail in trail_query.iter_mut() {
+            // Keep only the first position (the initial position)
+            if !trail.positions.is_empty() {
+                let first_pos = trail.positions[0];
+                trail.positions.clear();
+                trail.positions.push(first_pos);
+            }
+        }
+        
         println!("Reset to frame 0");
     }
 }
