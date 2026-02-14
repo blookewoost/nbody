@@ -52,6 +52,14 @@ struct BodyVisual {
     body_index: usize,
 }
 
+/// Component to track and render the trail of a body
+#[derive(Component)]
+struct BodyTrail {
+    body_index: usize,
+    positions: Vec<Vec3>,
+    max_trail_length: usize,
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     
@@ -94,6 +102,8 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, (
             update_positions,
+            update_trails,
+            render_trails,
             handle_input,
             update_ui,
         ))
@@ -122,16 +132,37 @@ fn setup(
         ..default()
     });
 
-    // Light
+    // Add ambient light for overall illumination
+    commands.insert_resource(AmbientLight {
+        color: Color::WHITE,
+        brightness: 500.0,
+    });
+
+    // Primary directional light
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 10000.0,
+            illuminance: 8000.0,
             ..default()
         },
         transform: Transform::from_rotation(Quat::from_euler(
             EulerRot::ZYX,
             0.0,
             std::f32::consts::PI / 4.0,
+            std::f32::consts::PI / 4.0,
+        )),
+        ..default()
+    });
+
+    // Secondary directional light for better side illumination
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 4000.0,
+            ..default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            -std::f32::consts::PI / 4.0,
             std::f32::consts::PI / 4.0,
         )),
         ..default()
@@ -163,6 +194,11 @@ fn setup(
                 ..default()
             },
             BodyVisual { body_index: idx },
+            BodyTrail {
+                body_index: idx,
+                positions: Vec::new(),
+                max_trail_length: 500, // Keep last 500 positions
+            },
         ));
     }
 
@@ -187,6 +223,76 @@ fn update_positions(
         {
             transform.translation = Vec3::new(pos.x, pos.y, pos.z);
         }
+    }
+}
+
+/// Update trail positions for each body
+fn update_trails(
+    state: Res<ViewerState>,
+    mut trail_query: Query<(&Transform, &mut BodyTrail)>,
+) {
+    for (transform, mut trail) in trail_query.iter_mut() {
+        trail.positions.push(transform.translation);
+        
+        // Keep only the most recent positions
+        if trail.positions.len() > trail.max_trail_length {
+            trail.positions.remove(0);
+        }
+    }
+}
+
+/// Render trails as line meshes
+fn render_trails(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    trail_query: Query<&BodyTrail, Changed<BodyTrail>>,
+) {
+    let trail_colors = [
+        Color::rgba(1.0, 0.5, 0.0, 0.6),    // Orange with transparency
+        Color::rgba(0.5, 0.8, 1.0, 0.6),    // Light blue
+        Color::rgba(1.0, 0.8, 0.2, 0.6),    // Yellow
+        Color::rgba(0.8, 0.3, 0.5, 0.6),    // Magenta
+    ];
+
+    for trail in trail_query.iter() {
+        if trail.positions.len() < 2 {
+            continue;
+        }
+
+        // Create a line mesh for the trail
+        let mut positions = Vec::new();
+        let mut indices = Vec::new();
+
+        for pos in &trail.positions {
+            positions.push([pos.x, pos.y, pos.z]);
+        }
+
+        // Create line segments connecting consecutive points
+        for i in 0..positions.len() - 1 {
+            indices.push(i as u32);
+            indices.push((i + 1) as u32);
+        }
+
+        let mut mesh = Mesh::new(
+            bevy::render::mesh::PrimitiveTopology::LineList,
+            bevy::render::render_asset::RenderAssetUsages::RENDER_WORLD,
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
+
+        let color = trail_colors[trail.body_index % trail_colors.len()];
+        let material = materials.add(StandardMaterial {
+            base_color: color,
+            unlit: false,
+            ..default()
+        });
+
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(mesh),
+            material,
+            ..default()
+        });
     }
 }
 
