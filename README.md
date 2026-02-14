@@ -127,6 +127,31 @@ Visualize trajectory data in real-time:
 - **LEFT Arrow**: Slow down playback (0.5x multiplier)
 - **RIGHT Arrow**: Speed up playback (0.5x multiplier)
 - **R**: Reset to start of simulation
+- **Mouse Drag**: Rotate the view
+- **Mouse Wheel**: Zoom in/out
+
+### Simulating and Viewing in One Command
+
+For convenience, use the provided workflow script to run the simulator and viewer together:
+
+```bash
+./simulate_and_view.sh ./data/earth_moon.ini
+```
+
+**Arguments:**
+- `<config_file>`: Path to INI file (required)
+- `[output_file]`: Path to output CSV (optional, default: `./data/results.csv`)
+
+**Example:**
+```bash
+./simulate_and_view.sh ./data/binary_stars.ini
+./simulate_and_view.sh ./data/earth_moon.ini ./data/custom_output.csv
+```
+
+The script will:
+1. Run the simulator with your configuration
+2. Generate the results CSV
+3. Automatically launch the viewer with the generated trajectory
 
 **Features:**
 - 3D rendering with perspective camera
